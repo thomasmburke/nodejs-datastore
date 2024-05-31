@@ -35,6 +35,7 @@ import {
   CallOptions,
   Operation,
   ServiceError,
+  grpc as gaxVendoredGrpc
 } from 'google-gax';
 import * as is from 'is';
 import {Transform, pipeline} from 'stream';
@@ -67,8 +68,12 @@ import {Transaction} from './transaction';
 import {promisifyAll} from '@google-cloud/promisify';
 import {google} from '../protos/protos';
 import {AggregateQuery} from './aggregate';
+import grpcGcpModule = require('grpc-gcp');
 
 const {grpc} = new GrpcClient();
+
+// Enable channel pooling
+const grpcGcp = grpcGcpModule(gaxVendoredGrpc);
 
 export type PathType = string | number | entity.Int;
 export interface BooleanObject {
@@ -503,9 +508,22 @@ class Datastore extends DatastoreRequest {
         scopes,
         servicePath: this.baseUrl_,
         port: typeof this.port_ === 'number' ? this.port_ : 443,
+        'grpc.callInvocationTransformer': grpcGcp.gcpCallInvocationTransformer,
+        'grpc.channelFactoryOverride': grpcGcp.gcpChannelFactoryOverride,
+        'grpc.gcpApiConfig': grpcGcp.createGcpApiConfig({
+          channelPool: {
+            minSize: 4,
+            maxSize: 10,
+            maxConcurrentStreamsLowWatermark: 100,
+            debugHeaderIntervalSecs: 600,
+          },
+        }),
       },
       options
     );
+
+
+
     const isUsingLocalhost =
       this.baseUrl_ &&
       (this.baseUrl_.includes('localhost') ||
